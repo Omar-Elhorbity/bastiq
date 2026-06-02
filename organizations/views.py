@@ -195,18 +195,27 @@ class OrganizationViewSet(viewsets.ModelViewSet):
 
         if not can_assign_role(actor_role, role):
             raise PermissionDenied("You can't invite someone at a role higher than your own.")
-        if Membership.objects.filter(organization=org, user__email__iexact=email).exists():
-            raise ValidationError("That user is already a member of this organization.")
-        if org.invitations.filter(email__iexact=email, status=InvitationStatus.PENDING).exists():
-            raise ValidationError("An invitation is already pending for that email.")
 
-        invitation = Invitation.objects.create(
-            organization=org,
-            email=email,
-            role=role,
-            invited_by=request.user,
-            expires_at=timezone.now() + timedelta(days=settings.INVITATION_TIMEOUT_DAYS),
-        )
+        from billing import limits
+
+        # Lock the org's billing row so the dedupe + member-cap check + create are
+        # atomic (concurrent invites can't double-create or exceed max_members).
+        with transaction.atomic():
+            limits.lock_billing(org)
+            if Membership.objects.filter(organization=org, user__email__iexact=email).exists():
+                raise ValidationError("That user is already a member of this organization.")
+            if org.invitations.filter(
+                email__iexact=email, status=InvitationStatus.PENDING
+            ).exists():
+                raise ValidationError("An invitation is already pending for that email.")
+            limits.check_can_invite_member(org)
+            invitation = Invitation.objects.create(
+                organization=org,
+                email=email,
+                role=role,
+                invited_by=request.user,
+                expires_at=timezone.now() + timedelta(days=settings.INVITATION_TIMEOUT_DAYS),
+            )
         send_invitation_email_task.delay(invitation.id)
         return Response(InvitationSerializer(invitation).data, status=status.HTTP_201_CREATED)
 

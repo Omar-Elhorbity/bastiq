@@ -34,5 +34,17 @@ class ProjectViewSet(TenantScopedViewSet):
     # update/delete to owner/admin or the creator.
     permission_classes = [IsAuthenticated, IsOrganizationMember, CanWriteProject]
 
+    def perform_create(self, serializer):
+        # Enforce max_projects server-side. Lock the org's billing row + create
+        # in one transaction so concurrent creates can't both slip past the cap.
+        from django.db import transaction
+
+        from billing import limits
+
+        with transaction.atomic():
+            limits.lock_billing(self.request.organization)
+            limits.check_can_create_project(self.request.organization)
+            super().perform_create(serializer)
+
     def get_create_kwargs(self) -> dict:
         return {"created_by": self.request.user}
