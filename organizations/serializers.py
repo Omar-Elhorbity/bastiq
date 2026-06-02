@@ -5,7 +5,7 @@ from __future__ import annotations
 from django.contrib.auth import get_user_model
 from rest_framework import serializers
 
-from organizations.models import Membership, Organization
+from organizations.models import Invitation, Membership, Organization, Role
 
 User = get_user_model()
 
@@ -55,3 +55,30 @@ class OrganizationSerializer(serializers.ModelSerializer):
             membership = obj.memberships.filter(user=request.user).first()
             return membership.role if membership else None
         return None
+
+
+class MemberRoleSerializer(serializers.Serializer):
+    """Input for changing a member's role."""
+
+    role = serializers.ChoiceField(choices=Role.choices)
+
+
+class InvitationSerializer(serializers.ModelSerializer):
+    invited_by = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    class Meta:
+        model = Invitation
+        fields = ["id", "email", "role", "status", "invited_by", "created_at", "expires_at"]
+        read_only_fields = fields
+
+
+class InvitationCreateSerializer(serializers.Serializer):
+    email = serializers.EmailField()
+    role = serializers.ChoiceField(choices=Role.choices, default=Role.MEMBER)
+
+    def validate_email(self, value: str) -> str:
+        return value.strip().lower()
+
+
+class InvitationAcceptSerializer(serializers.Serializer):
+    token = serializers.CharField(write_only=True)

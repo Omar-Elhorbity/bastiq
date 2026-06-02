@@ -9,10 +9,12 @@ plan-limit check on create is added in M5.
 from __future__ import annotations
 
 from drf_spectacular.utils import OpenApiParameter, extend_schema
+from rest_framework.permissions import IsAuthenticated
 
-from core.permissions import ORG_ID_HEADER
+from core.permissions import ORG_ID_HEADER, IsOrganizationMember
 from core.viewsets import TenantScopedViewSet
 from projects.models import Project
+from projects.permissions import CanWriteProject
 from projects.serializers import ProjectSerializer
 
 _ORG_HEADER_PARAM = OpenApiParameter(
@@ -28,6 +30,9 @@ _ORG_HEADER_PARAM = OpenApiParameter(
 class ProjectViewSet(TenantScopedViewSet):
     serializer_class = ProjectSerializer
     queryset = Project.objects.all()
+    # IsOrganizationMember scopes to the active org; CanWriteProject gates
+    # update/delete to owner/admin or the creator.
+    permission_classes = [IsAuthenticated, IsOrganizationMember, CanWriteProject]
 
     def get_create_kwargs(self) -> dict:
         return {"created_by": self.request.user}

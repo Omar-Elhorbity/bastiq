@@ -1,10 +1,11 @@
-"""Organization routes, mounted under /api/ by the root urlconf."""
+"""Organization & invitation routes, mounted under /api/ by the root urlconf."""
 
 from __future__ import annotations
 
+from django.urls import path
 from rest_framework.routers import SimpleRouter
 
-from organizations.views import OrganizationViewSet
+from organizations.views import InvitationAcceptView, OrganizationViewSet
 
 app_name = "organizations"
 
@@ -12,4 +13,7 @@ app_name = "organizations"
 router = SimpleRouter(trailing_slash=False)
 router.register("organizations", OrganizationViewSet, basename="organization")
 
-urlpatterns = router.urls
+urlpatterns = [
+    path("invitations/accept", InvitationAcceptView.as_view(), name="invitation-accept"),
+    *router.urls,
+]

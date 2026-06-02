@@ -10,7 +10,7 @@ isolated per-tenant data** as the headline guarantee.
 
 ## Status
 
-Built milestone by milestone. **M0–M3 complete.**
+Built milestone by milestone. **M0–M4 complete.**
 
 | Milestone | Scope | State |
 |---|---|---|
@@ -18,6 +18,7 @@ Built milestone by milestone. **M0–M3 complete.**
 | **M1** | Auth: register, email verification, JWT login/refresh, password reset, `/me` | ✅ |
 | **M2** | Organizations, memberships & active-org resolution | ✅ |
 | **M3** | Multi-tenant isolation + Projects | ✅ |
+| **M4** | RBAC (permission matrix) + invitations | ✅ |
 | M4 | RBAC + invitations | ⏳ |
 | M5 | Stripe billing | ⏳ |
 | M6 | Hardening, admin, seed, deploy | ⏳ |
@@ -144,7 +145,28 @@ smuggle another org's id through a payload. Org-management endpoints are
 additionally scoped to the caller's memberships (non-members get `404`, not
 another tenant's data). Projects (M3) are the first resource built on this base.
 
-> Owner/Admin/Member role *enforcement* (and member management) lands in M4.
+## RBAC & invitations (M4)
+
+Roles rank **Owner(3) > Admin(2) > Member(1)**. The matrix (encoded in
+`core/rbac.py`, enforced in views, and asserted cell-by-cell in tests):
+
+| Action | Owner | Admin | Member |
+|---|---|---|---|
+| Read org / members; read/create project | ✓ | ✓ | ✓ |
+| Update org (name) | ✓ | ✓ | ✗ |
+| Delete org | ✓ | ✗ | ✗ |
+| Invite member | ✓ (any role) | ✓ (≤ Admin) | ✗ |
+| Change role / remove member | ✓ | ✓ (targets ≤ Admin; assigns ≤ Admin) | ✗ |
+| Update/delete project | ✓ | ✓ | creator only |
+
+Two universal guards: **no escalation** (you can't grant a role above your own)
+and **no ownerless org** (you can't demote/remove the last Owner).
+
+**Member management:** `PATCH/DELETE /api/organizations/{id}/members/{mid}`.
+**Invitations:** `POST /api/organizations/{id}/invitations` (owner/admin) sends an
+async email with an opaque, expiring, single-use token; `POST /api/invitations/accept`
+creates the membership — the accepting user's email must match the invite, and
+accepts are row-locked so concurrent/replayed accepts can't double-join or 500.
 
 ## Projects — the sample tenant resource (M3)
 

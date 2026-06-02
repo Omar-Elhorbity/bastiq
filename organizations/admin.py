@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from django.contrib import admin
 
-from organizations.models import Membership, Organization
+from organizations.models import Invitation, Membership, Organization
 
 
 class MembershipInline(admin.TabularInline):
@@ -29,3 +29,12 @@ class MembershipAdmin(admin.ModelAdmin):
     search_fields = ("user__email", "organization__name")
     autocomplete_fields = ("user", "organization")
     readonly_fields = ("created_at",)
+
+
+@admin.register(Invitation)
+class InvitationAdmin(admin.ModelAdmin):
+    list_display = ("email", "organization", "role", "status", "invited_by", "expires_at")
+    list_filter = ("status", "role")
+    search_fields = ("email", "organization__name")
+    autocomplete_fields = ("organization", "invited_by")
+    readonly_fields = ("token", "created_at")
