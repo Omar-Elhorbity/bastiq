@@ -8,8 +8,11 @@ resolution used by tenant-scoped resources (M3+).
 
 from __future__ import annotations
 
+import secrets
+
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Role(models.TextChoices):
@@ -72,3 +75,49 @@ class Membership(models.Model):
     @property
     def is_admin_or_owner(self) -> bool:
         return self.role in {Role.OWNER, Role.ADMIN}
+
+
+def generate_invitation_token() -> str:
+    """Opaque, unguessable token stored on the Invitation row."""
+    return secrets.token_urlsafe(32)
+
+
+class InvitationStatus(models.TextChoices):
+    PENDING = "pending", "Pending"
+    ACCEPTED = "accepted", "Accepted"
+    REVOKED = "revoked", "Revoked"
+    EXPIRED = "expired", "Expired"
+
+
+class Invitation(models.Model):
+    organization = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name="invitations"
+    )
+    email = models.EmailField()
+    role = models.CharField(max_length=16, choices=Role.choices, default=Role.MEMBER)
+    token = models.CharField(
+        max_length=255, unique=True, default=generate_invitation_token, editable=False
+    )
+    status = models.CharField(
+        max_length=16, choices=InvitationStatus.choices, default=InvitationStatus.PENDING
+    )
+    invited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="+",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+
+    class Meta:
+        ordering = ["-created_at"]
+        indexes = [models.Index(fields=["organization", "status"])]
+
+    def __str__(self) -> str:
+        return f"{self.email} → {self.organization_id} ({self.role}, {self.status})"
+
+    @property
+    def is_expired(self) -> bool:
+        return timezone.now() >= self.expires_at

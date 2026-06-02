@@ -260,6 +260,7 @@ SPECTACULAR_SETTINGS = {
 # --------------------------------------------------------------------------- #
 EMAIL_VERIFICATION_TIMEOUT = env_int("EMAIL_VERIFICATION_TIMEOUT", 60 * 60 * 24 * 3)  # 3 days
 PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT", 60 * 60)  # 1 hour
+INVITATION_TIMEOUT_DAYS = env_int("INVITATION_TIMEOUT_DAYS", 7)
 # When true, accounts must verify their email before they can obtain JWTs.
 # Default false so the demo can log in immediately after registering.
 LOGIN_REQUIRE_VERIFIED_EMAIL = env_bool("LOGIN_REQUIRE_VERIFIED_EMAIL", False)

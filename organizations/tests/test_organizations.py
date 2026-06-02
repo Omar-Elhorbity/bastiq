@@ -120,12 +120,11 @@ def test_members_list_visible_to_members_only(as_user):
     assert as_user(outsider).get(f"{ORGS}/{org.id}/members").status_code == 404
 
 
-def test_update_and_delete_are_not_allowed_yet(as_user):
-    """PATCH/DELETE on orgs arrive in M4 (RBAC)."""
+def test_put_is_not_allowed(as_user):
+    """Only PATCH is supported for org updates (no full PUT replace)."""
     member = MembershipFactory(role=Role.OWNER)
     client = as_user(member.user)
-    assert client.patch(f"{ORGS}/{member.organization.id}", {"name": "X"}).status_code == 405
-    assert client.delete(f"{ORGS}/{member.organization.id}").status_code == 405
+    assert client.put(f"{ORGS}/{member.organization.id}", {"name": "X"}).status_code == 405
 
 
 def test_me_includes_organizations(as_user):
