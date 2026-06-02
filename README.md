@@ -10,14 +10,14 @@ isolated per-tenant data** as the headline guarantee.
 
 ## Status
 
-Built milestone by milestone. **M0–M2 complete.**
+Built milestone by milestone. **M0–M3 complete.**
 
 | Milestone | Scope | State |
 |---|---|---|
 | **M0** | Project skeleton, custom User model, Postgres, Docker, Celery, drf-spectacular, CI, `/healthz` | ✅ |
 | **M1** | Auth: register, email verification, JWT login/refresh, password reset, `/me` | ✅ |
 | **M2** | Organizations, memberships & active-org resolution | ✅ |
-| M3 | Multi-tenant isolation + Projects | ⏳ |
+| **M3** | Multi-tenant isolation + Projects | ✅ |
 | M4 | RBAC + invitations | ⏳ |
 | M5 | Stripe billing | ⏳ |
 | M6 | Hardening, admin, seed, deploy | ⏳ |
@@ -145,6 +145,30 @@ additionally scoped to the caller's memberships (non-members get `404`, not
 another tenant's data). Projects (M3) are the first resource built on this base.
 
 > Owner/Admin/Member role *enforcement* (and member management) lands in M4.
+
+## Projects — the sample tenant resource (M3)
+
+`/api/projects` is a normal CRUD resource that demonstrates the isolation
+invariant end-to-end. Every request carries `X-Organization-ID`; the resource is
+**scoped to that active org** by a single base class, `TenantScopedViewSet`:
+
+```
+get_queryset()   → super().get_queryset().filter(organization=request.organization)
+perform_create() → serializer.save(organization=request.organization, ...)
+```
+
+So a tenant queryset is never evaluated without an org filter, and `organization`
+is stamped server-side (the serializer doesn't even expose it). Consequences,
+all covered by tests:
+
+- Org B requesting org A's project → **404** (not 403 — B can't learn it exists).
+- Org B cannot PATCH/DELETE org A's project → **404**; lists are empty.
+- A request body or query param naming another org is **ignored** — the active
+  org comes only from the validated header.
+- Switching `X-Organization-ID` switches what's visible.
+
+New tenant resources inherit `core.models.TenantScopedModel` +
+`core.viewsets.TenantScopedViewSet` and get this isolation for free.
 
 ## Security posture (M0)
 
