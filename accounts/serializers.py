@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.conf import settings
 from django.contrib.auth import get_user_model, password_validation
 from django.core.exceptions import ValidationError as DjangoValidationError
+from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
 
@@ -29,10 +30,20 @@ def _split_name(name: str) -> tuple[str, str]:
     return parts[0], (parts[1] if len(parts) > 1 else "")
 
 
+class UserOrganizationSerializer(serializers.Serializer):
+    """A user's organization membership, as surfaced on /me."""
+
+    id = serializers.IntegerField()
+    name = serializers.CharField()
+    slug = serializers.SlugField()
+    role = serializers.CharField()
+
+
 class UserSerializer(serializers.ModelSerializer):
     """Public representation of a user (used by /me and register response)."""
 
     full_name = serializers.CharField(read_only=True)
+    organizations = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -44,8 +55,28 @@ class UserSerializer(serializers.ModelSerializer):
             "full_name",
             "is_email_verified",
             "date_joined",
+            "organizations",
         ]
         read_only_fields = fields
+
+    @extend_schema_field(UserOrganizationSerializer(many=True))
+    def get_organizations(self, obj):
+        from organizations.models import Membership
+
+        memberships = (
+            Membership.objects.filter(user=obj)
+            .select_related("organization")
+            .order_by("organization__name")
+        )
+        return [
+            {
+                "id": m.organization_id,
+                "name": m.organization.name,
+                "slug": m.organization.slug,
+                "role": m.role,
+            }
+            for m in memberships
+        ]
 
 
 class RegisterSerializer(serializers.Serializer):

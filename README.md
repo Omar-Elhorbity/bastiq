@@ -10,13 +10,13 @@ isolated per-tenant data** as the headline guarantee.
 
 ## Status
 
-Built milestone by milestone. **M0–M1 complete.**
+Built milestone by milestone. **M0–M2 complete.**
 
 | Milestone | Scope | State |
 |---|---|---|
 | **M0** | Project skeleton, custom User model, Postgres, Docker, Celery, drf-spectacular, CI, `/healthz` | ✅ |
 | **M1** | Auth: register, email verification, JWT login/refresh, password reset, `/me` | ✅ |
-| M2 | Organizations & active-org resolution | ⏳ |
+| **M2** | Organizations, memberships & active-org resolution | ✅ |
 | M3 | Multi-tenant isolation + Projects | ⏳ |
 | M4 | RBAC + invitations | ⏳ |
 | M5 | Stripe billing | ⏳ |
@@ -122,6 +122,29 @@ so a stolen session can't be refreshed and dies once its short access token
 **Brute-force protection.** Credential endpoints are scope-throttled (defaults):
 login `10/min`, register `10/hour`, password-reset `5/hour`, verify-email
 `20/hour` — all tunable via env.
+
+## Organizations & tenancy (M2)
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `POST /api/organizations` | JWT | Create an org; caller becomes **Owner** |
+| `GET /api/organizations` | JWT | The caller's organizations (with their role) |
+| `GET /api/organizations/{id}` | JWT (member) | One org; non-members get `404` |
+| `GET /api/organizations/{id}/members` | JWT (member) | The org's members |
+
+`GET /api/auth/me` now includes the caller's `organizations` (id, name, slug, role).
+
+**The isolation invariant** (the thing clients worry about) lives in exactly one
+place: `core/permissions.py::IsOrganizationMember`. For tenant-scoped requests it
+resolves the active organization from the `X-Organization-ID` header, validates
+it against the caller's `Membership`, and attaches `request.organization` /
+`request.membership`. The active org is **never** read from the request body or
+query params — so a user can't act on an org they don't belong to and can't
+smuggle another org's id through a payload. Org-management endpoints are
+additionally scoped to the caller's memberships (non-members get `404`, not
+another tenant's data). Projects (M3) are the first resource built on this base.
+
+> Owner/Admin/Member role *enforcement* (and member management) lands in M4.
 
 ## Security posture (M0)
 
