@@ -1,0 +1,38 @@
+# Build handoff (local spec, not part of the repo)
+bastiq-handoff.md
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Django
+*.log
+staticfiles/
+media/
+local_settings.py
+
+# Secrets & env
+.env
+.env.*
+!.env.example
+
+# Test / coverage
+.pytest_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
+
+# Editors / OS
+.idea/
+.vscode/
+.DS_Store
