@@ -39,3 +39,25 @@ def auth_client(api_client, user):
     access = RefreshToken.for_user(user).access_token
     api_client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
     return api_client
+
+
+@pytest.fixture
+def as_user(db):
+    """Factory → a fresh APIClient authenticated as ``user``.
+
+    Pass ``org`` (an Organization or its id) to also send the
+    ``X-Organization-ID`` header for tenant-scoped requests.
+    """
+    from rest_framework.test import APIClient
+    from rest_framework_simplejwt.tokens import RefreshToken
+
+    def _make(user, org=None):
+        client = APIClient()
+        access = RefreshToken.for_user(user).access_token
+        creds = {"HTTP_AUTHORIZATION": f"Bearer {access}"}
+        if org is not None:
+            creds["HTTP_X_ORGANIZATION_ID"] = str(getattr(org, "id", org))
+        client.credentials(**creds)
+        return client
+
+    return _make
