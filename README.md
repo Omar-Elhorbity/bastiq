@@ -10,7 +10,7 @@ isolated per-tenant data** as the headline guarantee.
 
 ## Status
 
-Built milestone by milestone. **M0–M4 complete.**
+Built milestone by milestone. **M0–M5 complete.**
 
 | Milestone | Scope | State |
 |---|---|---|
@@ -19,6 +19,7 @@ Built milestone by milestone. **M0–M4 complete.**
 | **M2** | Organizations, memberships & active-org resolution | ✅ |
 | **M3** | Multi-tenant isolation + Projects | ✅ |
 | **M4** | RBAC (permission matrix) + invitations | ✅ |
+| **M5** | Stripe billing: plans, checkout, portal, webhook, plan limits | ✅ |
 | M4 | RBAC + invitations | ⏳ |
 | M5 | Stripe billing | ⏳ |
 | M6 | Hardening, admin, seed, deploy | ⏳ |
@@ -191,6 +192,39 @@ all covered by tests:
 
 New tenant resources inherit `core.models.TenantScopedModel` +
 `core.viewsets.TenantScopedViewSet` and get this isolation for free.
+
+## Billing (M5)
+
+Stripe (test mode). Plans are seeded (Free/Pro/Business); every org starts on
+Free. Endpoints under `/api/billing/`:
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `GET /plans` | JWT | Active plans + limits |
+| `GET /subscription` | JWT (member) | The active org's subscription |
+| `POST /checkout` `{plan_code}` | JWT (owner) | Stripe Checkout URL |
+| `POST /portal` | JWT (owner) | Stripe customer-portal URL |
+| `POST /webhook` | **public** | Signature-verified, idempotent |
+
+**The webhook is the source of truth** (never the success redirect): it verifies
+the `Stripe-Signature` against the endpoint secret on the raw body, dedupes on
+`WebhookEvent.stripe_event_id` (a duplicate delivery is a no-op), and maps
+`checkout.session.completed` / `customer.subscription.updated|deleted` /
+`invoice.payment_failed` to local `Subscription` state. Record + process happen
+in one transaction, so a handler failure rolls back the ledger row and Stripe's
+retry reprocesses.
+
+**Plan limits** are enforced server-side at creation time and never trust the
+client: creating a project checks `max_projects`; inviting a member checks
+`max_members` (members + pending invites). Over the cap → **402 Payment
+Required** with a clear "upgrade" message. The check + create run in one
+transaction with the org's billing row locked, so concurrent creates can't slip
+past the cap. Downgrades keep existing data and simply block new creation until
+back under the cap.
+
+Configure Stripe via `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` and wire plan
+price ids with `python manage.py seed_plans` (reads `STRIPE_PRICE_PRO` /
+`STRIPE_PRICE_BUSINESS`).
 
 ## Security posture (M0)
 

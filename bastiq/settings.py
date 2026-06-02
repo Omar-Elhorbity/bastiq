@@ -261,6 +261,19 @@ SPECTACULAR_SETTINGS = {
 EMAIL_VERIFICATION_TIMEOUT = env_int("EMAIL_VERIFICATION_TIMEOUT", 60 * 60 * 24 * 3)  # 3 days
 PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT", 60 * 60)  # 1 hour
 INVITATION_TIMEOUT_DAYS = env_int("INVITATION_TIMEOUT_DAYS", 7)
+
+
+# --------------------------------------------------------------------------- #
+# Stripe billing (test mode). The webhook is the source of truth — never trust
+# the success redirect. Price ids are set per-plan (admin or `seed_plans`).
+# --------------------------------------------------------------------------- #
+STRIPE_SECRET_KEY = env_str("STRIPE_SECRET_KEY")
+STRIPE_WEBHOOK_SECRET = env_str("STRIPE_WEBHOOK_SECRET")
+STRIPE_PRICE_PRO = env_str("STRIPE_PRICE_PRO")
+STRIPE_PRICE_BUSINESS = env_str("STRIPE_PRICE_BUSINESS")
+BILLING_SUCCESS_URL = env_str("BILLING_SUCCESS_URL", f"{FRONTEND_URL}/billing/success")
+BILLING_CANCEL_URL = env_str("BILLING_CANCEL_URL", f"{FRONTEND_URL}/billing/cancel")
+BILLING_PORTAL_RETURN_URL = env_str("BILLING_PORTAL_RETURN_URL", f"{FRONTEND_URL}/billing")
 # When true, accounts must verify their email before they can obtain JWTs.
 # Default false so the demo can log in immediately after registering.
 LOGIN_REQUIRE_VERIFIED_EMAIL = env_bool("LOGIN_REQUIRE_VERIFIED_EMAIL", False)
