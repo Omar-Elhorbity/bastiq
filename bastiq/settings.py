@@ -84,6 +84,7 @@ DJANGO_APPS = [
 
 THIRD_PARTY_APPS = [
     "rest_framework",
+    "rest_framework_simplejwt.token_blacklist",
     "drf_spectacular",
 ]
 
@@ -210,8 +211,12 @@ REST_FRAMEWORK = {
 SIMPLE_JWT = {
     "ACCESS_TOKEN_LIFETIME": timedelta(minutes=env_int("JWT_ACCESS_MINUTES", 30)),
     "REFRESH_TOKEN_LIFETIME": timedelta(days=env_int("JWT_REFRESH_DAYS", 7)),
-    "ROTATE_REFRESH_TOKENS": False,
-    "BLACKLIST_AFTER_ROTATION": False,
+    # Rotate refresh tokens and blacklist the consumed one, so a refresh token
+    # can't be replayed. Combined with revoking a user's outstanding refresh
+    # tokens on password reset, a stolen session is bounded by the (short)
+    # access-token lifetime once the access token expires.
+    "ROTATE_REFRESH_TOKENS": True,
+    "BLACKLIST_AFTER_ROTATION": True,
     "UPDATE_LAST_LOGIN": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
     "USER_ID_FIELD": "id",
@@ -247,6 +252,17 @@ SPECTACULAR_SETTINGS = {
         "displayRequestDuration": True,
     },
 }
+
+
+# --------------------------------------------------------------------------- #
+# Auth flows (email verification & password reset use signed, expiring tokens
+# via django.core.signing — no token table). Timeouts are in seconds.
+# --------------------------------------------------------------------------- #
+EMAIL_VERIFICATION_TIMEOUT = env_int("EMAIL_VERIFICATION_TIMEOUT", 60 * 60 * 24 * 3)  # 3 days
+PASSWORD_RESET_TIMEOUT = env_int("PASSWORD_RESET_TIMEOUT", 60 * 60)  # 1 hour
+# When true, accounts must verify their email before they can obtain JWTs.
+# Default false so the demo can log in immediately after registering.
+LOGIN_REQUIRE_VERIFIED_EMAIL = env_bool("LOGIN_REQUIRE_VERIFIED_EMAIL", False)
 
 
 # --------------------------------------------------------------------------- #

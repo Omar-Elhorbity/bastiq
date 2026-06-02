@@ -10,12 +10,12 @@ isolated per-tenant data** as the headline guarantee.
 
 ## Status
 
-Built milestone by milestone. **M0 (skeleton & infra) is complete.**
+Built milestone by milestone. **M0–M1 complete.**
 
 | Milestone | Scope | State |
 |---|---|---|
 | **M0** | Project skeleton, custom User model, Postgres, Docker, Celery, drf-spectacular, CI, `/healthz` | ✅ |
-| M1 | Auth: register, email verification, JWT login/refresh, password reset, `/me` | ⏳ |
+| **M1** | Auth: register, email verification, JWT login/refresh, password reset, `/me` | ✅ |
 | M2 | Organizations & active-org resolution | ⏳ |
 | M3 | Multi-tenant isolation + Projects | ⏳ |
 | M4 | RBAC + invitations | ⏳ |
@@ -93,6 +93,35 @@ ruff check . && ruff format --check .
 All deployment config is environment-driven — see [`.env.example`](.env.example).
 Security defaults (HSTS, secure cookies, SSL redirect, etc.) switch on
 automatically when `DJANGO_DEBUG=false`. Secrets are never committed.
+
+## Auth API (M1)
+
+All under `/api/auth/` (JSON):
+
+| Method & path | Auth | Purpose |
+|---|---|---|
+| `POST /register` | public | Create an unverified user; sends a verification email (async) |
+| `POST /verify-email` | public | Confirm email from a signed token |
+| `POST /login` | public | Obtain a JWT `access` + `refresh` pair |
+| `POST /token/refresh` | public | Rotate a refresh token for a new access token |
+| `POST /password-reset` | public | Request a reset email (always `202`; no user enumeration) |
+| `POST /password-reset/confirm` | public | Set a new password from a single-use token |
+| `GET /me` | JWT | The authenticated user |
+
+**Token strategy.** Email-verification and password-reset tokens are signed,
+expiring payloads via `django.core.signing` (no token table). Distinct salts
+bind each token to its flow. Reset tokens are single-use — they embed a
+fingerprint of the password hash + `last_login`, so resetting (or logging in)
+invalidates outstanding reset links.
+
+**Session security.** JWT refresh tokens rotate and the consumed one is
+blacklisted. A password reset blacklists the user's outstanding refresh tokens,
+so a stolen session can't be refreshed and dies once its short access token
+(≤ `JWT_ACCESS_MINUTES`) expires.
+
+**Brute-force protection.** Credential endpoints are scope-throttled (defaults):
+login `10/min`, register `10/hour`, password-reset `5/hour`, verify-email
+`20/hour` — all tunable via env.
 
 ## Security posture (M0)
 
