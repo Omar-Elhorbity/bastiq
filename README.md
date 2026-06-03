@@ -5,6 +5,11 @@ foundation every B2B SaaS needs on day one: **authentication**, **organizations
 with role-based teams**, and **Stripe subscription billing**, with **correctly
 isolated per-tenant data** as the headline guarantee.
 
+> **🚀 Live demo:** **<https://bastiq-web.onrender.com/api/docs>** — interactive
+> Swagger UI. Sign in with `owner@acme.test` / `BastiqDemo!23` and send
+> `X-Organization-ID: 1` on tenant-scoped calls. *(Hosted on a free tier, so the
+> first request after idle may take ~30–60s to wake.)*
+
 > A *bastion* is a walled, defended stronghold. Every tenant's data lives sealed
 > behind its own walls — and that boundary is enforced in exactly one place.
 
@@ -31,6 +36,11 @@ centrally, and proven with tests.
   a one-file Render deploy.
 
 ## Screenshots
+
+**Landing page** — the site root greets visitors and links to the docs, health,
+admin, and source:
+
+![Bastiq landing page](docs/screenshots/landing.png)
 
 **Interactive API docs (OpenAPI / Swagger)** — the whole surface, grouped by area,
 generated from the code:
