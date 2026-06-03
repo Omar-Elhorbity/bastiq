@@ -58,12 +58,16 @@ if not SECRET_KEY:
         raise ImproperlyConfigured("DJANGO_SECRET_KEY must be set when DJANGO_DEBUG is false.")
 
 ALLOWED_HOSTS = env_list("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
-# Render (and most PaaS) inject an external hostname at runtime.
+CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+# Render (and most PaaS) inject an external hostname at runtime. Trust it for
+# both host validation and CSRF (admin/login over HTTPS) so a Blueprint deploy
+# needs no manual host/origin config.
 _render_host = env_str("RENDER_EXTERNAL_HOSTNAME")
 if _render_host:
     ALLOWED_HOSTS.append(_render_host)
-
-CSRF_TRUSTED_ORIGINS = env_list("DJANGO_CSRF_TRUSTED_ORIGINS")
+    origin = f"https://{_render_host}"
+    if origin not in CSRF_TRUSTED_ORIGINS:
+        CSRF_TRUSTED_ORIGINS.append(origin)
 
 # Base URL used to build user-facing links (email verification, password reset,
 # Stripe checkout redirects). Kept separate from ALLOWED_HOSTS on purpose.
