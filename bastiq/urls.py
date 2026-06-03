@@ -15,6 +15,11 @@ from drf_spectacular.views import (
 
 from core.views import healthz
 
+# Admin branding.
+admin.site.site_header = "Bastiq administration"
+admin.site.site_title = "Bastiq admin"
+admin.site.index_title = "Bastiq"
+
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("healthz", healthz, name="healthz"),

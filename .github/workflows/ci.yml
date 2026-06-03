@@ -57,4 +57,4 @@ jobs:
       - name: Run migrations check (no missing migrations)
         run: python manage.py makemigrations --check --dry-run
       - name: Run tests with coverage
-        run: pytest --cov --cov-report=term-missing --cov-fail-under=80
+        run: pytest --cov --cov-report=term-missing --cov-fail-under=90

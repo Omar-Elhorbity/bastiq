@@ -20,7 +20,8 @@ class SubscriptionAdmin(admin.ModelAdmin):
     list_filter = ("status", "plan")
     search_fields = ("organization__name", "stripe_customer_id", "stripe_subscription_id")
     autocomplete_fields = ("organization", "plan")
-    readonly_fields = ("updated_at",)
+    # Stripe ids are synced from webhooks — manual edits would break matching.
+    readonly_fields = ("stripe_customer_id", "stripe_subscription_id", "updated_at")
 
 
 @admin.register(WebhookEvent)

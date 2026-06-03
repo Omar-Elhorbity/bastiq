@@ -37,4 +37,5 @@ class InvitationAdmin(admin.ModelAdmin):
     list_filter = ("status", "role")
     search_fields = ("email", "organization__name")
     autocomplete_fields = ("organization", "invited_by")
-    readonly_fields = ("token", "created_at")
+    # token + expiry are system-set at creation; don't allow manual edits.
+    readonly_fields = ("token", "created_at", "expires_at")

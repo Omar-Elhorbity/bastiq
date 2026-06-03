@@ -1,0 +1,84 @@
+# Render Blueprint — web + worker + Postgres + Redis.
+# Deploy: push to GitHub, then in Render "New > Blueprint" and point at this repo.
+# `RENDER_EXTERNAL_HOSTNAME` is auto-injected and appended to ALLOWED_HOSTS by
+# settings, so you don't need to set the host manually.
+#
+# After the first deploy: set STRIPE_* secrets, then run `seed_plans`
+# (and `seed_demo` for the walkthrough) from the service shell.
+
+databases:
+  - name: bastiq-db
+    plan: free
+    databaseName: bastiq
+    postgresMajorVersion: "16"
+
+services:
+  - type: redis
+    name: bastiq-redis
+    plan: free
+    ipAllowList: []        # internal-only
+
+  # Shared env so web and worker use the SAME secret key — signed tokens minted
+  # by the worker (verification/reset/invite emails) must verify in web.
+  - type: web
+    name: bastiq-web
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /healthz
+    preDeployCommand: "python manage.py migrate --noinput && python manage.py seed_plans"
+    envVars:
+      - fromGroup: bastiq-env
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bastiq-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: bastiq-redis
+          property: connectionString
+
+  - type: worker
+    name: bastiq-worker
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerCommand: celery -A bastiq worker -l info --concurrency 2
+    envVars:
+      - fromGroup: bastiq-env
+      - key: DATABASE_URL
+        fromDatabase:
+          name: bastiq-db
+          property: connectionString
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: bastiq-redis
+          property: connectionString
+
+envVarGroups:
+  - name: bastiq-env
+    envVars:
+      - key: DJANGO_SECRET_KEY
+        generateValue: true       # generated once, shared by web + worker
+      - key: DJANGO_DEBUG
+        value: "false"
+      - key: DJANGO_ALLOWED_HOSTS
+        value: ""                 # RENDER_EXTERNAL_HOSTNAME is appended automatically
+      - key: EMAIL_BACKEND
+        value: console            # set to "sendgrid" + SENDGRID_API_KEY for real email
+      - key: DEFAULT_FROM_EMAIL
+        value: no-reply@bastiq.example
+      - key: SENDGRID_API_KEY
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      - key: STRIPE_PRICE_PRO
+        sync: false
+      - key: STRIPE_PRICE_BUSINESS
+        sync: false
+      - key: DOCS_REQUIRE_AUTH
+        value: "false"            # public Swagger for the demo
