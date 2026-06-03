@@ -25,6 +25,12 @@ RUN mkdir -p /app/staticfiles && chown -R appuser:appuser /app/staticfiles
 
 USER appuser
 
+# Collect static (admin + DRF browsable API) into STATIC_ROOT so WhiteNoise can
+# serve them in production. A throwaway key just lets settings import; no DB or
+# network is touched by collectstatic.
+RUN DJANGO_SECRET_KEY=build-only-not-used DJANGO_DEBUG=false \
+    python manage.py collectstatic --noinput
+
 EXPOSE 8000
 
 # Production default. Gunicorn serving WSGI; WhiteNoise serves static assets.

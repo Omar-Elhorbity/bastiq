@@ -11,6 +11,7 @@ from __future__ import annotations
 import secrets
 
 from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
 
@@ -46,10 +47,10 @@ class Organization(models.Model):
 
 
 class Membership(models.Model):
-    # NOTE: protection against removing/demoting the *last* Owner (so an org is
-    # never left ownerless) is enforced in M4, where member management — the only
-    # API path that demotes/removes members — is implemented ("can't demote last
-    # owner"). M2 has no API to delete memberships.
+    # An org must never be left ownerless. The API enforces this (core.rbac), and
+    # clean()/delete() below enforce it at the MODEL layer too — so the admin,
+    # inline forms, and shell can't orphan an org either. Org cascade-delete still
+    # works: the delete collector bypasses Model.delete().
     user = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="memberships"
     )
@@ -75,6 +76,31 @@ class Membership(models.Model):
     @property
     def is_admin_or_owner(self) -> bool:
         return self.role in {Role.OWNER, Role.ADMIN}
+
+    def _org_owner_count(self) -> int:
+        return Membership.objects.filter(
+            organization_id=self.organization_id, role=Role.OWNER
+        ).count()
+
+    def clean(self) -> None:
+        # Block demoting the last owner (runs via full_clean in admin/forms).
+        if self.pk:
+            current_role = (
+                Membership.objects.filter(pk=self.pk).values_list("role", flat=True).first()
+            )
+            if (
+                current_role == Role.OWNER
+                and self.role != Role.OWNER
+                and self._org_owner_count() <= 1
+            ):
+                raise ValidationError("Cannot demote the last owner of the organization.")
+
+    def delete(self, *args, **kwargs):
+        # Block removing the last owner. Cascade deletes (e.g. deleting the org)
+        # go through the collector, which bypasses this, so they still work.
+        if self.role == Role.OWNER and self._org_owner_count() <= 1:
+            raise ValidationError("Cannot remove the last owner of the organization.")
+        return super().delete(*args, **kwargs)
 
 
 def generate_invitation_token() -> str:

@@ -8,38 +8,45 @@ isolated per-tenant data** as the headline guarantee.
 > A *bastion* is a walled, defended stronghold; every tenant's data lives sealed
 > behind its own walls.
 
-## Status
-
-Built milestone by milestone. **M0–M5 complete.**
+## Status — complete (M0–M6)
 
 | Milestone | Scope | State |
 |---|---|---|
-| **M0** | Project skeleton, custom User model, Postgres, Docker, Celery, drf-spectacular, CI, `/healthz` | ✅ |
+| **M0** | Skeleton, custom User model, Postgres, Docker, Celery, drf-spectacular, CI, `/healthz` | ✅ |
 | **M1** | Auth: register, email verification, JWT login/refresh, password reset, `/me` | ✅ |
 | **M2** | Organizations, memberships & active-org resolution | ✅ |
 | **M3** | Multi-tenant isolation + Projects | ✅ |
 | **M4** | RBAC (permission matrix) + invitations | ✅ |
 | **M5** | Stripe billing: plans, checkout, portal, webhook, plan limits | ✅ |
-| M4 | RBAC + invitations | ⏳ |
-| M5 | Stripe billing | ⏳ |
-| M6 | Hardening, admin, seed, deploy | ⏳ |
+| **M6** | Hardening: customized admin, seed data, Render deploy, full test suite | ✅ |
+
+**~190 tests, ~95% coverage**, ruff-clean, OpenAPI schema validates with no
+warnings. Each milestone was built on its own branch, adversarially reviewed,
+and merged via PR.
 
 ## Tech stack
 
 Python 3.12 · Django 5.2 · Django REST Framework · PostgreSQL 16 · Celery + Redis
 · djangorestframework-simplejwt · drf-spectacular (OpenAPI/Swagger) · Stripe ·
-Docker / docker-compose · GitHub Actions CI · pytest + factory_boy · ruff.
+Docker / docker-compose · GitHub Actions CI · pytest + factory_boy · ruff ·
+gunicorn + WhiteNoise · Render (deploy).
 
 ## Architecture
 
-Five apps; all multi-tenancy isolation will live in `core/` only (M3):
+Five apps; **all multi-tenancy isolation lives in `core/` only**:
 
 ```
-core/          tenancy base classes, permissions, active-org resolution
+HTTP (DRF)
+  1. JWT auth            → request.user                         (accounts)
+  2. active-org resolve  → request.organization                 (core: X-Organization-ID → Membership)
+  3. role check          → IsOrganizationMember / RBAC matrix    (core)
+  4. tenant queryset     → .filter(organization=request.org)     (core: TenantScopedViewSet)
+
+core/          tenancy base classes, permissions, active-org resolution, RBAC matrix
 accounts/      custom email-based User, auth views, /me
 organizations/ Organization, Membership, Invitation + views
-billing/       Plan, Subscription, WebhookEvent + Stripe + limit enforcement
-projects/      sample tenant-scoped resource (isolation + RBAC + limits)
+billing/       Plan, Subscription, WebhookEvent + Stripe + plan-limit enforcement
+projects/      sample tenant-scoped resource (isolation + RBAC + limits, end-to-end)
 ```
 
 The Django project package is `bastiq/` (settings, urls, celery, wsgi/asgi).
@@ -47,193 +54,141 @@ The Django project package is `bastiq/` (settings, urls, celery, wsgi/asgi).
 ## Quickstart (Docker)
 
 ```bash
-cp .env.example .env          # optional; compose has dev-safe defaults
-docker compose up             # boots web + db + redis + worker
+docker compose up                 # boots web + db + redis + worker (dev-safe defaults)
+docker compose exec web python manage.py seed_demo   # demo org/users/projects
 ```
 
-Then:
-
-- Health: <http://localhost:8000/healthz> → `{"status": "ok"}`
 - Swagger UI: <http://localhost:8000/api/docs>
-- Django admin: <http://localhost:8000/admin/> (create a superuser first)
+- Health: <http://localhost:8000/healthz> → `{"status": "ok"}`
+- Admin: <http://localhost:8000/admin/> (`docker compose exec web python manage.py createsuperuser`)
 
-Create an admin user:
+### Demo credentials (from `seed_demo`)
 
-```bash
-docker compose exec web python manage.py createsuperuser
-```
+Organization **Acme Inc** on the **Free** plan. All three users share the
+password **`BastiqDemo!23`**. Use the org id printed by `seed_demo` as the
+`X-Organization-ID` header for tenant-scoped requests.
 
-## Local development (without Docker for the app)
+| Email | Role |
+|---|---|
+| `owner@acme.test` | Owner |
+| `admin@acme.test` | Admin |
+| `member@acme.test` | Member |
 
-Requires a reachable Postgres and Redis (e.g. `docker compose up -d db redis`).
+## Local development (app outside Docker)
+
+Needs a reachable Postgres + Redis (`docker compose up -d db redis`).
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
-
 export DATABASE_URL=postgres://postgres:postgres@localhost:5432/bastiq
 export DJANGO_DEBUG=true DJANGO_SECRET_KEY=dev-secret
-
-python manage.py migrate
-python manage.py runserver
+python manage.py migrate && python manage.py seed_demo && python manage.py runserver
 ```
 
 ## Tests, lint, format
 
-The test suite uses `bastiq.test_settings`, which pins a deterministic, fast
-environment (in-memory email, eager Celery, fast hashing). It needs a Postgres
-reachable at `DATABASE_URL` (defaults to `localhost:5432`).
+Tests use `bastiq.test_settings` (deterministic: in-memory email, eager Celery,
+fast hashing) and need a Postgres at `DATABASE_URL` (defaults to `localhost:5432`).
 
 ```bash
-pytest                       # run the suite
-pytest --cov                 # with coverage (CI gate: 80%)
+pytest                       # the suite
+pytest --cov                 # with coverage (CI gate: 90%)
 ruff check . && ruff format --check .
 ```
+
+## The demo script (live walkthrough)
+
+1. Open **Swagger** (`/api/docs`).
+2. **Register** → **verify email** (the token is printed to the worker log / email) → **login** for a JWT.
+3. **Create org** "Demo Co" (you become Owner) → **invite** a teammate (`POST /api/organizations/{id}/invitations`) → they **accept** (`POST /api/invitations/accept`).
+4. **Create projects** up to the Free limit (3) with `X-Organization-ID` set; the 4th is **blocked** with a clear `402 — plan limit reached`.
+5. **Upgrade:** `POST /api/billing/checkout {plan_code: "pro"}` → pay in Stripe test Checkout with `4242 4242 4242 4242` → the **webhook** flips the subscription to **Pro** → the 4th project now succeeds.
+6. **Isolation:** switch `X-Organization-ID` to a second org → the first org's projects are **invisible** (404).
+7. **RBAC:** a Member can't change roles or delete the org; an Owner can.
+
+## The three things to defend on a client call
+
+### (a) Multi-tenant isolation — the invariant
+The active organization is resolved in exactly **one** audited place
+(`core/permissions.py::IsOrganizationMember`): from the `X-Organization-ID`
+header, **validated against the caller's `Membership`**, then attached as
+`request.organization`. A single base class (`core/viewsets.py::TenantScopedViewSet`)
+filters every tenant queryset by it and stamps it on create. The org is **never**
+read from the request body or query params, so a user can't act on an org they
+don't belong to and can't smuggle another org's id through a payload. Cross-org
+access returns **404** (you can't even learn the row exists). New tenant resources
+inherit `TenantScopedModel` + `TenantScopedViewSet` and get this for free.
+
+### (b) RBAC matrix
+Roles rank **Owner(3) > Admin(2) > Member(1)** (`core/rbac.py`, asserted cell-by-cell):
+
+| Action | Owner | Admin | Member |
+|---|---|---|---|
+| Read org/members; read/create project | ✓ | ✓ | ✓ |
+| Update org | ✓ | ✓ | ✗ |
+| Delete org | ✓ | ✗ | ✗ |
+| Invite member | ✓ (any) | ✓ (≤ Admin) | ✗ |
+| Change role / remove member | ✓ | ✓ (≤ Admin) | ✗ |
+| Update/delete project | ✓ | ✓ | creator only |
+
+Universal guards: **no escalation** (can't grant above your own rank) and **no
+ownerless org** (can't demote/remove the last Owner).
+
+### (c) Stripe billing + webhook
+The **webhook is the source of truth**, not the success redirect: it verifies
+`Stripe-Signature` on the raw body, dedupes on `WebhookEvent.stripe_event_id`
+(idempotent), and maps `checkout.session.completed` /
+`customer.subscription.updated|deleted` / `invoice.payment_failed` to local
+`Subscription` state — record + process in one transaction so a failure
+reprocesses on Stripe's retry. **Plan limits** are enforced server-side at
+creation time (projects + members), locked against concurrent creates, returning
+`402` over the cap.
+
+## API surface
+
+`/api/auth/` register · verify-email · login · token/refresh · password-reset(/confirm) · me
+`/api/organizations[/{id}[/members/{mid}|/invitations]]` · `/api/invitations/accept`
+`/api/projects[/{id}]` (tenant-scoped; needs `X-Organization-ID`)
+`/api/billing/` plans · subscription · checkout · portal · webhook
+`/api/docs` (Swagger) · `/api/schema` · `/healthz`
+
+Auth: `Authorization: Bearer <access>`. Tenant resources also send
+`X-Organization-ID: <org_id>` (validated against membership).
 
 ## Configuration
 
 All deployment config is environment-driven — see [`.env.example`](.env.example).
-Security defaults (HSTS, secure cookies, SSL redirect, etc.) switch on
-automatically when `DJANGO_DEBUG=false`. Secrets are never committed.
+Production security (HSTS, secure cookies, SSL redirect, proxy SSL header) turns
+on automatically when `DJANGO_DEBUG=false`, and a missing `DJANGO_SECRET_KEY`
+**aborts startup** (fail-closed). Swagger is public by default for the demo; set
+`DOCS_REQUIRE_AUTH=true` to lock it down. Secrets are never committed.
 
-## Auth API (M1)
+## Deployment (Render)
 
-All under `/api/auth/` (JSON):
+[`render.yaml`](render.yaml) is a Blueprint: web (gunicorn) + worker (celery) +
+Postgres + Redis. `web` and `worker` share one `DJANGO_SECRET_KEY` env group so
+signed tokens minted by the worker verify in web. Deploy:
 
-| Method & path | Auth | Purpose |
-|---|---|---|
-| `POST /register` | public | Create an unverified user; sends a verification email (async) |
-| `POST /verify-email` | public | Confirm email from a signed token |
-| `POST /login` | public | Obtain a JWT `access` + `refresh` pair |
-| `POST /token/refresh` | public | Rotate a refresh token for a new access token |
-| `POST /password-reset` | public | Request a reset email (always `202`; no user enumeration) |
-| `POST /password-reset/confirm` | public | Set a new password from a single-use token |
-| `GET /me` | JWT | The authenticated user |
+1. Push to GitHub → Render **New → Blueprint** → select this repo.
+2. Set `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` (+ `STRIPE_PRICE_*`) on the env group.
+3. The pre-deploy command runs `migrate` + `seed_plans`; run `seed_demo` once from the shell for the walkthrough.
+4. Point a Stripe **test-mode** webhook at `https://<host>/api/billing/webhook` and set the signing secret.
 
-**Token strategy.** Email-verification and password-reset tokens are signed,
-expiring payloads via `django.core.signing` (no token table). Distinct salts
-bind each token to its flow. Reset tokens are single-use — they embed a
-fingerprint of the password hash + `last_login`, so resetting (or logging in)
-invalidates outstanding reset links.
+`RENDER_EXTERNAL_HOSTNAME` is auto-appended to `ALLOWED_HOSTS`. The image runs as
+a non-root user and `collectstatic` runs at build (WhiteNoise serves static).
 
-**Session security.** JWT refresh tokens rotate and the consumed one is
-blacklisted. A password reset blacklists the user's outstanding refresh tokens,
-so a stolen session can't be refreshed and dies once its short access token
-(≤ `JWT_ACCESS_MINUTES`) expires.
+## Acceptance checklist
 
-**Brute-force protection.** Credential endpoints are scope-throttled (defaults):
-login `10/min`, register `10/hour`, password-reset `5/hour`, verify-email
-`20/hour` — all tunable via env.
-
-## Organizations & tenancy (M2)
-
-| Method & path | Auth | Purpose |
-|---|---|---|
-| `POST /api/organizations` | JWT | Create an org; caller becomes **Owner** |
-| `GET /api/organizations` | JWT | The caller's organizations (with their role) |
-| `GET /api/organizations/{id}` | JWT (member) | One org; non-members get `404` |
-| `GET /api/organizations/{id}/members` | JWT (member) | The org's members |
-
-`GET /api/auth/me` now includes the caller's `organizations` (id, name, slug, role).
-
-**The isolation invariant** (the thing clients worry about) lives in exactly one
-place: `core/permissions.py::IsOrganizationMember`. For tenant-scoped requests it
-resolves the active organization from the `X-Organization-ID` header, validates
-it against the caller's `Membership`, and attaches `request.organization` /
-`request.membership`. The active org is **never** read from the request body or
-query params — so a user can't act on an org they don't belong to and can't
-smuggle another org's id through a payload. Org-management endpoints are
-additionally scoped to the caller's memberships (non-members get `404`, not
-another tenant's data). Projects (M3) are the first resource built on this base.
-
-## RBAC & invitations (M4)
-
-Roles rank **Owner(3) > Admin(2) > Member(1)**. The matrix (encoded in
-`core/rbac.py`, enforced in views, and asserted cell-by-cell in tests):
-
-| Action | Owner | Admin | Member |
-|---|---|---|---|
-| Read org / members; read/create project | ✓ | ✓ | ✓ |
-| Update org (name) | ✓ | ✓ | ✗ |
-| Delete org | ✓ | ✗ | ✗ |
-| Invite member | ✓ (any role) | ✓ (≤ Admin) | ✗ |
-| Change role / remove member | ✓ | ✓ (targets ≤ Admin; assigns ≤ Admin) | ✗ |
-| Update/delete project | ✓ | ✓ | creator only |
-
-Two universal guards: **no escalation** (you can't grant a role above your own)
-and **no ownerless org** (you can't demote/remove the last Owner).
-
-**Member management:** `PATCH/DELETE /api/organizations/{id}/members/{mid}`.
-**Invitations:** `POST /api/organizations/{id}/invitations` (owner/admin) sends an
-async email with an opaque, expiring, single-use token; `POST /api/invitations/accept`
-creates the membership — the accepting user's email must match the invite, and
-accepts are row-locked so concurrent/replayed accepts can't double-join or 500.
-
-## Projects — the sample tenant resource (M3)
-
-`/api/projects` is a normal CRUD resource that demonstrates the isolation
-invariant end-to-end. Every request carries `X-Organization-ID`; the resource is
-**scoped to that active org** by a single base class, `TenantScopedViewSet`:
-
-```
-get_queryset()   → super().get_queryset().filter(organization=request.organization)
-perform_create() → serializer.save(organization=request.organization, ...)
-```
-
-So a tenant queryset is never evaluated without an org filter, and `organization`
-is stamped server-side (the serializer doesn't even expose it). Consequences,
-all covered by tests:
-
-- Org B requesting org A's project → **404** (not 403 — B can't learn it exists).
-- Org B cannot PATCH/DELETE org A's project → **404**; lists are empty.
-- A request body or query param naming another org is **ignored** — the active
-  org comes only from the validated header.
-- Switching `X-Organization-ID` switches what's visible.
-
-New tenant resources inherit `core.models.TenantScopedModel` +
-`core.viewsets.TenantScopedViewSet` and get this isolation for free.
-
-## Billing (M5)
-
-Stripe (test mode). Plans are seeded (Free/Pro/Business); every org starts on
-Free. Endpoints under `/api/billing/`:
-
-| Method & path | Auth | Purpose |
-|---|---|---|
-| `GET /plans` | JWT | Active plans + limits |
-| `GET /subscription` | JWT (member) | The active org's subscription |
-| `POST /checkout` `{plan_code}` | JWT (owner) | Stripe Checkout URL |
-| `POST /portal` | JWT (owner) | Stripe customer-portal URL |
-| `POST /webhook` | **public** | Signature-verified, idempotent |
-
-**The webhook is the source of truth** (never the success redirect): it verifies
-the `Stripe-Signature` against the endpoint secret on the raw body, dedupes on
-`WebhookEvent.stripe_event_id` (a duplicate delivery is a no-op), and maps
-`checkout.session.completed` / `customer.subscription.updated|deleted` /
-`invoice.payment_failed` to local `Subscription` state. Record + process happen
-in one transaction, so a handler failure rolls back the ledger row and Stripe's
-retry reprocesses.
-
-**Plan limits** are enforced server-side at creation time and never trust the
-client: creating a project checks `max_projects`; inviting a member checks
-`max_members` (members + pending invites). Over the cap → **402 Payment
-Required** with a clear "upgrade" message. The check + create run in one
-transaction with the org's billing row locked, so concurrent creates can't slip
-past the cap. Downgrades keep existing data and simply block new creation until
-back under the cap.
-
-Configure Stripe via `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` and wire plan
-price ids with `python manage.py seed_plans` (reads `STRIPE_PRICE_PRO` /
-`STRIPE_PRICE_BUSINESS`).
-
-## Security posture (M0)
-
-- Custom `accounts.User` set as `AUTH_USER_MODEL` from the first migration; email
-  is the login identifier.
-- DRF defaults to `IsAuthenticated` — endpoints opt **out** to be public.
-- JWT via simplejwt; access/refresh lifetimes are env-tunable.
-- Runs as a non-root user in the container.
-- Fail-closed: in production a missing `DJANGO_SECRET_KEY` aborts startup rather
-  than booting insecurely.
-
-The full demo script and the isolation-invariant write-up land in M6.
+- [x] `docker compose up` boots web + db + redis + worker; `/healthz` green
+- [x] Custom User model from the first migration; email is the login
+- [x] Register → verify → login → password reset; emails async (worker)
+- [x] Creating an org makes the creator an Owner; roles enforced per the matrix
+- [x] **Org B cannot read/write org A's data (tested); org never from the body**
+- [x] Invitation invite + accept creates the correct membership
+- [x] Stripe Checkout → subscription via webhook; signature verified; **duplicate processed once**; `payment_failed` handled
+- [x] Plan limits enforced server-side (projects + members); clear error at the cap
+- [x] Customized Django admin, org-scoped and filtered
+- [x] Test suite passes (auth, isolation, RBAC, billing idempotency, limits)
+- [x] Render Blueprint + Stripe webhook documented
+- [x] README documents setup, the demo script, and the isolation invariant
