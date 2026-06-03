@@ -32,14 +32,10 @@ services:
     plan: free
     dockerfilePath: ./Dockerfile
     healthCheckPath: /healthz
-    # Free tier has no preDeployCommand / Shell, so migrate + seed at start.
-    # All steps are idempotent; createsuperuser is best-effort — it only creates
-    # an admin when DJANGO_SUPERUSER_* are set, and is a no-op on later boots.
-    dockerCommand: >-
-      sh -c "python manage.py migrate --noinput &&
-             python manage.py seed_demo &&
-             (python manage.py createsuperuser --noinput || true) &&
-             exec gunicorn bastiq.wsgi:application --bind 0.0.0.0:8000 --workers 2 --timeout 60 --access-logfile - --error-logfile -"
+    # Free tier has no preDeployCommand / Shell, so migrations + seeding run at
+    # start inside bin/start-render.sh (a script, not an inline command, to avoid
+    # YAML-folding / shell-quoting pitfalls), which then launches gunicorn.
+    dockerCommand: sh bin/start-render.sh
     envVars:
       - fromGroup: bastiq-env
       - key: DATABASE_URL
