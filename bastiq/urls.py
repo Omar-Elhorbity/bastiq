@@ -13,7 +13,7 @@ from drf_spectacular.views import (
     SpectacularSwaggerView,
 )
 
-from core.views import healthz
+from core.views import healthz, landing
 
 # Admin branding.
 admin.site.site_header = "Bastiq administration"
@@ -21,6 +21,7 @@ admin.site.site_title = "Bastiq admin"
 admin.site.index_title = "Bastiq"
 
 urlpatterns = [
+    path("", landing, name="landing"),
     path("admin/", admin.site.urls),
     path("healthz", healthz, name="healthz"),
     # OpenAPI schema + Swagger UI.
