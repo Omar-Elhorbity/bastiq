@@ -5,8 +5,9 @@ foundation every B2B SaaS needs on day one: **authentication**, **organizations
 with role-based teams**, and **Stripe subscription billing**, with **correctly
 isolated per-tenant data** as the headline guarantee.
 
-> **🚀 Live demo:** **<https://bastiq-web.onrender.com/api/docs>** — interactive
-> Swagger UI. Sign in with `owner@acme.test` / `BastiqDemo!23` and send
+> **🚀 Live demo:** **<https://bastiq-web.onrender.com>** — the landing page, with
+> the interactive **[API docs](https://bastiq-web.onrender.com/api/docs)** (Swagger)
+> one click away. Sign in with `owner@acme.test` / `BastiqDemo!23` and send
 > `X-Organization-ID: 1` on tenant-scoped calls. *(Hosted on a free tier, so the
 > first request after idle may take ~30–60s to wake.)*
 
@@ -37,8 +38,8 @@ centrally, and proven with tests.
 
 ## Screenshots
 
-**Landing page** — the site root greets visitors and links to the docs, health,
-admin, and source:
+**Landing page** (`/`) — an editorial front door: it states the guarantee, sums up
+the three pillars (isolation · roles · billing), and drives to the live API docs:
 
 ![Bastiq landing page](docs/screenshots/landing.png)
 
@@ -128,8 +129,8 @@ Organization **Acme Inc** on the **Free** plan. All three users share the passwo
 
 The fastest way to see everything working, end to end, in Swagger:
 
-1. **Register** → **verify email** (the token is printed to the worker log) →
-   **login** for a JWT.
+1. **Register** → **verify email** (the token is printed to the logs — the Celery
+   worker locally, or the web process on the free-tier deploy) → **login** for a JWT.
 2. **Create an org** (you become its Owner) → **invite** a teammate
    (`POST /api/organizations/{id}/invitations`) → they **accept**
    (`POST /api/invitations/accept`).
@@ -141,6 +142,11 @@ The fastest way to see everything working, end to end, in Swagger:
 5. **Isolation:** switch `X-Organization-ID` to a second org → the first org's
    projects are **invisible** (`404`).
 6. **RBAC:** a Member can't change roles or delete the org; an Owner can.
+
+> On the **hosted demo**, steps 1–3, 5, and 6 work as-is. Step 4 (Stripe Checkout)
+> needs Stripe keys, which the free-tier demo doesn't set — checkout returns a clean
+> `503` there. Run it locally with Stripe configured to see Checkout end to end, or
+> flip a plan from the admin (Billing → Subscriptions) to watch the limits lift.
 
 ## The three things that matter most
 
