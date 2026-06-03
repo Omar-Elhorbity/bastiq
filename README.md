@@ -38,8 +38,8 @@ centrally, and proven with tests.
 
 ## Screenshots
 
-**Landing page** (`/`) — an editorial front door: it states the guarantee, sums up
-the three pillars (isolation · roles · billing), and drives to the live API docs:
+**Landing page** (`/`) — the editorial front door: states the guarantee and drives
+to the live API docs (it continues below into the three pillars and a demo block):
 
 ![Bastiq landing page](docs/screenshots/landing.png)
 
