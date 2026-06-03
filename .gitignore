@@ -1,5 +1,6 @@
-# Build handoff (local spec, not part of the repo)
+# Local-only docs (spec + personal deploy runbook, not part of the repo)
 bastiq-handoff.md
+bastiq-deploy-guide.md
 
 # Python
 __pycache__/
