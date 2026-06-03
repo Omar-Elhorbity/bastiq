@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bastiq — multi-tenant SaaS backend</title>
+<meta name="description" content="Bastiq is a production-ready, multi-tenant SaaS backend in Django and DRF — authentication, role-based teams, and Stripe billing, with airtight per-tenant isolation.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · genre: editorial · macrostructure: Long Document · theme: Newsprint (custom editorial palette)
+ * enrichment: none · nav: N9 edge-aligned minimal · footer: Ft4 dense colophon
+ * tone: technical-editorial · audience: hiring engineers / reviewers · use: open the live API docs
+ * pre-emit critique: P5 H5 E5 S5 R4 V4
+ */
+
+:root {
+  /* — paper & ink (warm off-white, near-black; never pure #fff/#000) — */
+  --color-paper:      oklch(97.8% 0.007 90);
+  --color-paper-2:    oklch(95.2% 0.009 88);
+  --color-ink:        oklch(24% 0.018 270);
+  --color-ink-2:      oklch(34% 0.016 270);
+  --color-muted:      oklch(45% 0.013 270);
+  /* — single accent hue: deep ink-blue, used sparingly — */
+  --color-accent:     oklch(45% 0.12 250);
+  --color-accent-press: oklch(38% 0.12 250);
+  --color-on-accent:  oklch(98% 0.006 90);
+  --color-rule:       oklch(86% 0.01 90);
+
+  /* — type — */
+  --font-display: "Fraunces", ui-serif, Georgia, serif;
+  --font-body:    "Newsreader", ui-serif, Georgia, "Times New Roman", serif;
+  --font-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --text-xs:   0.78rem;
+  --text-sm:   0.9rem;
+  --text-base: 1.0625rem;
+  --text-lg:   1.25rem;
+  --text-xl:   1.6rem;
+  --text-2xl:  clamp(1.9rem, 3.5vw, 2.4rem);
+  --text-display-s: clamp(2rem, 5vw, 2.9rem);
+  --text-display:   clamp(2.9rem, 8.5vw, 5.25rem);
+
+  --measure: 60ch;
+
+  /* — 4pt spacing scale — */
+  --space-2xs: 0.5rem;
+  --space-xs:  0.75rem;
+  --space-sm:  1rem;
+  --space-md:  1.5rem;
+  --space-lg:  2.5rem;
+  --space-xl:  4rem;
+  --space-2xl: clamp(4rem, 9vw, 7rem);
+
+  --page-gutter: clamp(1.25rem, 5vw, 4rem);
+  --rule-hair: 1px;
+  --radius-sm: 3px;
+
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --dur-short: 160ms;
+  --dur-med:   460ms;
+}
+
+* { box-sizing: border-box; }
+html, body { overflow-x: clip; }
+html { -webkit-text-size-adjust: 100%; }
+
+body {
+  margin: 0;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-size: var(--text-base);
+  line-height: 1.65;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection { background: var(--color-accent); color: var(--color-on-accent); }
+
+a { color: var(--color-accent); }
+
+.skip-link {
+  position: absolute; left: -9999px; top: 0;
+  background: var(--color-ink); color: var(--color-paper);
+  padding: var(--space-2xs) var(--space-sm); z-index: 10;
+}
+.skip-link:focus-visible { left: var(--space-sm); top: var(--space-sm); }
+
+:where(a, button, summary):focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.wrap { max-width: 72rem; margin-inline: auto; padding-inline: var(--page-gutter); }
+
+/* ───────────────── N9 · edge-aligned minimal nav ───────────────── */
+.nav {
+  display: flex; align-items: baseline; justify-content: space-between;
+  flex-wrap: wrap; gap: var(--space-xs) var(--space-md);
+  padding-block: var(--space-md);
+  border-bottom: var(--rule-hair) solid var(--color-rule);
+}
+.brand {
+  font-family: var(--font-display);
+  font-weight: 600; font-size: var(--text-xl);
+  letter-spacing: -0.01em; color: var(--color-ink); text-decoration: none;
+}
+.brand .dot { color: var(--color-accent); }
+.nav-right { display: flex; align-items: center; gap: var(--space-md); flex-wrap: wrap; }
+.nav-link {
+  font-family: var(--font-mono); font-size: var(--text-sm);
+  letter-spacing: 0.01em; color: var(--color-ink-2); text-decoration: none;
+  padding-block: var(--space-2xs);
+  white-space: nowrap;
+  border-bottom: 1px solid transparent;
+  transition: color var(--dur-short) var(--ease-out), border-color var(--dur-short) var(--ease-out);
+}
+.nav-link:hover { color: var(--color-ink); border-bottom-color: var(--color-rule); }
+
+/* ───────────────── buttons & links ───────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 0.5em;
+  font-family: var(--font-mono); font-size: var(--text-sm); font-weight: 600;
+  letter-spacing: 0.01em; white-space: nowrap;
+  padding: 0.7em 1.15em; border-radius: var(--radius-sm);
+  text-decoration: none; cursor: pointer; border: 1px solid transparent;
+  min-height: 44px; box-sizing: border-box;
+  transition: background-color var(--dur-short) var(--ease-out),
+              color var(--dur-short) var(--ease-out),
+              transform 90ms var(--ease-out);
+}
+.btn .arrow { transition: transform var(--dur-short) var(--ease-out); }
+.btn-primary { background: var(--color-accent); color: var(--color-on-accent); }
+.btn-primary:hover { background: var(--color-accent-press); }
+.btn-primary:hover .arrow { transform: translateX(3px); }
+.btn-primary:active { transform: translateY(1px); }
+.btn-ghost { color: var(--color-ink); border-color: var(--color-rule); background: transparent; }
+.btn-ghost:hover { border-color: var(--color-ink-2); }
+
+.tlink {
+  color: var(--color-accent); text-decoration: none;
+  border-bottom: 1.5px solid color-mix(in oklch, var(--color-accent) 35%, transparent);
+  transition: border-color var(--dur-short) var(--ease-out);
+  white-space: nowrap;
+}
+.tlink:hover { border-bottom-color: var(--color-accent); }
+
+/* ───────────────── hero (Long Document opening) ───────────────── */
+.hero { padding-block: clamp(3rem, 9vw, 6.5rem) var(--space-xl); }
+.hero-kicker {
+  font-family: var(--font-mono); font-size: var(--text-xs);
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-muted);
+  margin: 0 0 var(--space-md);
+}
+h1 {
+  font-family: var(--font-display);
+  font-weight: 600; font-optical-sizing: auto;
+  font-size: var(--text-display); line-height: 1.02; letter-spacing: -0.02em;
+  margin: 0; max-width: 16ch;
+  overflow-wrap: anywhere; min-width: 0;
+}
+h1 em { font-style: italic; font-weight: 500; }
+.lede {
+  font-size: var(--text-lg); line-height: 1.6; color: var(--color-ink-2);
+  max-width: var(--measure); margin: var(--space-lg) 0 0;
+}
+.cta-row {
+  display: flex; flex-wrap: wrap; gap: var(--space-sm) var(--space-md);
+  align-items: center; margin-top: var(--space-lg);
+}
+
+/* ───────────────── prose body + pillar heads ───────────────── */
+.prose { max-width: var(--measure); padding-block: var(--space-xl); }
+.prose > * + * { margin-top: var(--space-md); }
+.section + .section { margin-top: var(--space-2xl); }
+.pillar-head {
+  font-family: var(--font-display); font-weight: 600; font-style: italic;
+  font-size: var(--text-2xl); line-height: 1.1; letter-spacing: -0.01em;
+  color: var(--color-ink); margin: 0 0 var(--space-sm);
+  overflow-wrap: anywhere; min-width: 0;
+}
+.prose p { margin: 0; }
+.prose p + p { margin-top: var(--space-sm); }
+.prose code {
+  font-family: var(--font-mono); font-size: 0.86em;
+  background: var(--color-paper-2); padding: 0.1em 0.35em; border-radius: 2px;
+}
+
+.fleuron {
+  border: 0; height: auto; text-align: center; color: var(--color-rule);
+  margin: var(--space-xl) 0; overflow: visible;
+}
+.fleuron::before { content: "❡"; color: var(--color-accent); font-size: var(--text-lg); }
+
+.figures {
+  font-family: var(--font-mono); font-size: var(--text-sm);
+  font-variant-numeric: tabular-nums; color: var(--color-ink-2);
+  border-top: var(--rule-hair) solid var(--color-rule);
+  border-bottom: var(--rule-hair) solid var(--color-rule);
+  padding-block: var(--space-sm); margin-top: var(--space-lg);
+  display: flex; flex-wrap: wrap; gap: var(--space-2xs) var(--space-md);
+}
+.figures b { color: var(--color-accent); font-weight: 600; }
+
+/* ───────────────── demo block ───────────────── */
+.demo {
+  background: var(--color-paper-2);
+  border-top: var(--rule-hair) solid var(--color-rule);
+  border-bottom: var(--rule-hair) solid var(--color-rule);
+  padding-block: var(--space-2xl);
+}
+.demo .pillar-head { font-style: italic; }
+.demo p { max-width: var(--measure); margin: 0; }
+.demo p + .codeblock { margin-top: var(--space-md); }
+.codeblock {
+  font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.9;
+  color: var(--color-ink); background: var(--color-paper);
+  border: var(--rule-hair) solid var(--color-rule); border-radius: var(--radius-sm);
+  padding: var(--space-md); overflow-x: auto; max-width: var(--measure);
+}
+.codeblock .tok { color: var(--color-muted); }
+.codeblock .val { color: var(--color-accent); }
+
+/* ───────────────── Ft4 · dense colophon ───────────────── */
+.colophon {
+  font-family: var(--font-mono); font-size: var(--text-sm); line-height: 1.85;
+  color: var(--color-muted);
+  border-top: var(--rule-hair) solid var(--color-rule);
+  padding-block: var(--space-xl);
+}
+.colophon p { max-width: 78ch; margin: 0; }
+.colophon .lead { color: var(--color-ink-2); }
+.colophon a { color: var(--color-ink-2); text-decoration: none; white-space: nowrap; border-bottom: 1px solid var(--color-rule); }
+.colophon a:hover { color: var(--color-accent); border-bottom-color: var(--color-accent); }
+.colophon .meta { margin-top: var(--space-sm); }
+
+/* ───────────────── one orchestrated entrance ───────────────── */
+.rise { opacity: 0; transform: translateY(12px); animation: rise var(--dur-med) var(--ease-out) forwards; }
+@keyframes rise { to { opacity: 1; transform: none; } }
+
+@media (max-width: 40rem) {
+  h1 { letter-spacing: -0.01em; }
+  .nav { padding-block: var(--space-sm); }
+  .figures { gap: var(--space-2xs) var(--space-sm); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rise { opacity: 1; transform: none; animation: none; }
+  .btn, .nav-link, .tlink, .colophon a, .btn .arrow { transition: none; }
+}
+</style>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="wrap nav">
+  <a class="brand" href="/">Bastiq<span class="dot">.</span></a>
+  <nav class="nav-right" aria-label="Primary">
+    <a class="nav-link" href="/api/docs">API docs</a>
+    <a class="nav-link" href="https://github.com/Omar-Elhorbity/bastiq">Source</a>
+    <a class="btn btn-primary" href="/api/docs">Live API <span class="arrow" aria-hidden="true">&rarr;</span></a>
+  </nav>
+</header>
+
+<main id="main" class="wrap">
+
+  <section class="hero rise">
+    <p class="hero-kicker">Multi-tenant SaaS backend · Django + DRF</p>
+    <h1>Every tenant behind <em>its own walls.</em></h1>
+    <p class="lede">
+      Bastiq is a production-ready, multi-tenant SaaS backend — authentication,
+      organizations with role-based teams, and Stripe subscription billing. Its one
+      headline guarantee: each tenant’s data stays sealed behind its own walls, and
+      that boundary is enforced in exactly one place.
+    </p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/api/docs">Explore the live API <span class="arrow" aria-hidden="true">&rarr;</span></a>
+      <a class="btn btn-ghost" href="https://github.com/Omar-Elhorbity/bastiq">Read the source</a>
+    </div>
+  </section>
+
+  <article class="prose">
+    <section class="section">
+      <h2 class="pillar-head">Isolation, as an invariant.</h2>
+      <p>
+        The active organization is resolved in exactly one audited place — read from a
+        validated <code>X-Organization-ID</code> header, never from the request body — and a
+        single base view-set scopes every query to it. So no view can forget to scope a
+        query, and a tenant can’t smuggle another org’s id through a payload.
+      </p>
+      <p>
+        Cross-tenant reads don’t return <code>403</code>; they return <code>404</code>. You can’t act on an
+        organization you don’t belong to, and you can’t even learn that another tenant’s
+        rows exist.
+      </p>
+    </section>
+
+    <section class="section">
+      <h2 class="pillar-head">Roles that constrain.</h2>
+      <p>
+        Owner, Admin, Member — ranked, with no-privilege-escalation and
+        no-ownerless-organization guards enforced in the API and again at the model layer.
+        A Member can’t change roles or delete the org; an Owner can. Nobody can grant a
+        role above their own, and the last Owner can’t be demoted or removed.
+      </p>
+      <p>The permission matrix is asserted cell by cell in the test suite — not left to a comment.</p>
+    </section>
+
+    <section class="section">
+      <h2 class="pillar-head">Billing you can trust.</h2>
+      <p>
+        The Stripe webhook is the source of truth, not the success redirect:
+        signature-verified on the raw body, idempotent on the event id, and
+        recorded-then-processed in a single transaction, so a mid-flight failure simply
+        reprocesses on Stripe’s retry.
+      </p>
+      <p>
+        Plan limits are enforced server-side at creation time — Free allows three projects,
+        Pro twenty-five, Business no limit — and a create over the cap returns <code>402</code>,
+        never a silent overflow.
+      </p>
+      <p class="figures">
+        <span><b>195</b> tests</span>
+        <span><b>95%</b> coverage</span>
+        <span>OpenAPI schema · <b>0</b> warnings</span>
+        <span>CI gate <b>90%</b></span>
+      </p>
+    </section>
+
+    <hr class="fleuron" aria-hidden="true">
+  </article>
+
+</main>
+
+<section class="demo">
+  <div class="wrap prose">
+    <h2 class="pillar-head">Try it.</h2>
+    <p>
+      The demo runs on a free tier, so the first request may take a half-minute to wake.
+      Sign in through the <a class="tlink" href="/api/docs">interactive API docs</a> with the
+      credentials below, then send <code>X-Organization-ID: 1</code> on tenant-scoped calls.
+    </p>
+    <pre class="codeblock"><span class="tok">POST</span> /api/auth/login   <span class="tok">→</span>  owner@acme.test  ·  <span class="val">BastiqDemo!23</span>
+<span class="tok">header</span>  X-Organization-ID: <span class="val">1</span>
+<span class="tok">then</span>    GET /api/projects  ·  POST /api/billing/checkout …</pre>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/api/docs">Open the API docs <span class="arrow" aria-hidden="true">&rarr;</span></a>
+    </div>
+  </div>
+</section>
+
+<footer class="wrap colophon">
+  <p class="lead">
+    <strong>Bastiq</strong> — a production multi-tenant SaaS backend. Built with Django 5,
+    Django REST Framework, PostgreSQL 16, Celery, and Stripe; served by gunicorn behind
+    WhiteNoise and deployed on Render.
+  </p>
+  <p class="meta">
+    <a href="/api/docs">API docs</a> ·
+    <a href="https://github.com/Omar-Elhorbity/bastiq">Source</a> ·
+    <a href="/healthz">Health</a> ·
+    <a href="/admin/">Admin</a>
+    &nbsp;&nbsp; Tenant isolation · RBAC · Stripe billing.
+  </p>
+</footer>
+
+</body>
+</html>
